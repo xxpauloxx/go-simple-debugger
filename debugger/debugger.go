@@ -8,18 +8,50 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 )
+
+const HelpMessage = `Available commands:
+  list              - List all variables and their values.
+  get <variable>    - Get the value of a specific variable.
+  set <variable> <value> - Set the value of a variable.
+  continue, c       - Continue execution.
+  quit, q           - Quit the program.`
+
+var mutex sync.Mutex
 
 func Breakpoint(variables map[string]interface{}) {
 	_, file, line, _ := runtime.Caller(1)
+
 	fmt.Printf("🛑 Breakpoint reached at %s:%d\n", file, line)
 	fmt.Println("Type 'help' for available commands.")
 
+	handleDebugSession(variables)
+}
+
+func GoroutineBreakpoint(variables map[string]interface{}, wg *sync.WaitGroup) {
+	defer wg.Done()
+	mutex.Lock()
+
+	defer mutex.Unlock()
+
+	_, file, line, _ := runtime.Caller(1)
+
+	fmt.Printf("🛑 Goroutine Breakpoint reached at %s:%d\n", file, line)
+	fmt.Println("Type 'help' for available commands.")
+
+	handleDebugSession(variables)
+}
+
+func handleDebugSession(variables map[string]interface{}) {
 	reader := bufio.NewReader(os.Stdin)
+
 	for {
 		fmt.Print("debug> ")
+
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(input)
+
 		parts := strings.Split(input, " ")
 
 		switch parts[0] {
@@ -50,23 +82,20 @@ func Breakpoint(variables map[string]interface{}) {
 }
 
 func printHelp() {
-	fmt.Println(`Available commands:
-  list              - List all variables and their values.
-  get <variable>    - Get the value of a specific variable.
-  set <variable> <value> - Set the value of a variable.
-  continue, c       - Continue execution.
-  quit, q           - Quit the program.`)
+	fmt.Println(HelpMessage)
 }
 
 func listVariables(variables map[string]interface{}) {
 	for name, value := range variables {
-		fmt.Printf(" - %s: %v (type: %s)\n", name, reflect.ValueOf(value).Elem(), reflect.TypeOf(value))
+		fmt.Printf(" - %s: %v (type: %s)\n", name,
+			reflect.ValueOf(value).Elem(), reflect.TypeOf(value))
 	}
 }
 
 func getVariable(variables map[string]interface{}, name string) {
 	if value, ok := variables[name]; ok {
-		fmt.Printf("%s: %v (type: %s)\n", name, reflect.ValueOf(value).Elem(), reflect.TypeOf(value))
+		fmt.Printf("%s: %v (type: %s)\n", name,
+			reflect.ValueOf(value).Elem(), reflect.TypeOf(value))
 	} else {
 		fmt.Printf("Variable '%s' not found.\n", name)
 	}
