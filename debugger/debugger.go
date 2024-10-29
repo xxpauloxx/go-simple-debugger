@@ -40,7 +40,56 @@ func GoroutineBreakpoint(variables map[string]interface{}, wg *sync.WaitGroup) {
 	fmt.Printf("🛑 Goroutine Breakpoint reached at %s:%d\n", file, line)
 	fmt.Println("Type 'help' for available commands.")
 
-	handleDebugSession(variables)
+	commandChan := make(chan string)
+
+	go func() {
+		reader := bufio.NewReader(os.Stdin)
+		for {
+			fmt.Print("debug> ")
+			input, _ := reader.ReadString('\n')
+			input = strings.TrimSpace(input)
+			commandChan <- input
+		}
+	}()
+
+	for {
+		select {
+		case input := <-commandChan:
+			handleCommand(input, variables)
+			if input == "continue" || input == "c" {
+				return
+			}
+		}
+	}
+}
+
+func handleCommand(input string, variables map[string]interface{}) {
+	parts := strings.Split(input, " ")
+
+	switch parts[0] {
+	case "help":
+		printHelp()
+	case "list":
+		listVariables(variables)
+	case "get":
+		if len(parts) < 2 {
+			fmt.Println("Usage: get <variable>")
+		} else {
+			getVariable(variables, parts[1])
+		}
+	case "set":
+		if len(parts) < 3 {
+			fmt.Println("Usage: set <variable> <value>")
+		} else {
+			setVariable(variables, parts[1], parts[2])
+		}
+	case "continue", "c":
+		return
+	case "quit", "q":
+		os.Exit(0)
+	default:
+		fmt.Println("Unknown command. Type 'help' for available commands.")
+	}
 }
 
 func handleDebugSession(variables map[string]interface{}) {
